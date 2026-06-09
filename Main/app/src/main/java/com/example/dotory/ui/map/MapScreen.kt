@@ -1,16 +1,37 @@
 package com.example.dotory.ui.map
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
 import com.kakao.vectormap.MapLifeCycleCallback
 import com.kakao.vectormap.MapView
+import com.kakao.vectormap.camera.CameraUpdateFactory
 
 @Composable
 fun MapScreen(
@@ -18,10 +39,24 @@ fun MapScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var kakaoMapInstance by remember { mutableStateOf<KakaoMap?>(null) }
+
+    // 뷰모델의 줌 이벤트를 감지하여 카메라 조작
+    LaunchedEffect(viewModel) {
+        viewModel.zoomEvent.collect { event ->
+            kakaoMapInstance?.let { map ->
+                when (event) {
+                    ZoomEvent.ZoomIn -> map.moveCamera(CameraUpdateFactory.zoomIn())
+                    ZoomEvent.ZoomOut -> map.moveCamera(CameraUpdateFactory.zoomOut())
+                }
+            }
+        }
+    }
 
     Box(
         modifier = modifier.fillMaxSize()
     ) {
+        // 지도 뷰
         AndroidView(
             factory = { context ->
                 MapView(context).apply {
@@ -35,12 +70,50 @@ fun MapScreen(
                         }
                     }, object : KakaoMapReadyCallback() {
                         override fun onMapReady(kakaoMap: KakaoMap) {
-                            // F-01: 지도 준비 완료
+                            kakaoMapInstance = kakaoMap
                         }
                     })
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        // 우측 하단 줌 컨트롤 버튼 레이아웃
+        Card(
+            shape = RoundedCornerShape(8.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 16.dp, bottom = 32.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                IconButton(
+                    onClick = { viewModel.zoomIn() }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "확대",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                HorizontalDivider(
+                    modifier = Modifier.width(24.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                )
+                IconButton(
+                    onClick = { viewModel.zoomOut() }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Remove,
+                        contentDescription = "축소",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
     }
 }
