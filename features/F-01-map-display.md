@@ -19,6 +19,9 @@
 - [ ] 지도를 핀치, 스크롤로 자유롭게 탐색할 수 있다.
 - [ ] Jetpack Compose 환경에서 카카오 지도 SDK v2의 `KakaoMap` 컴포저블을 안정적으로 렌더링한다.
 
+- [ ] 화면 우측에 지도를 확대할 수 있는 `+` 버튼과 축소할 수 있는 `-` 버튼(줌 컨트롤러)이 세로로 배치된다.
+- [ ] 각 버튼을 탭하면 현재 지도 카메라의 줌 레벨(Zoom Level)이 한 단계씩 부드럽게 확대/축소된다.
+
 ## 3. 변경 범위
 
 ### 신규 파일
@@ -88,6 +91,24 @@ fun MapScreen(
         )
   
         // TODO: FR-05 상단 카테고리 필터 칩 가로 레이아웃 위치
+    }
+}
+```
+
+```
+// ui/map/MapScreen.kt 내부 줌 컨트롤러 배치 가이드
+Box(modifier = Modifier.fillMaxSize()) {
+    AndroidView( ... )
+
+    // 우측 중앙 혹은 우하단에 줌 버튼 세로 정렬 배치
+    Column(
+        modifier = Modifier
+            .align(Alignment.CenterEnd)
+            .padding(end = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        IconButton(onClick = { viewModel.zoomIn() }) { ... } // 확대
+        IconButton(onClick = { viewModel.zoomOut() }) { ... } // 축소
     }
 }
 ```
