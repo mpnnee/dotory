@@ -20,6 +20,7 @@ import com.example.dotory.ui.map.MapViewModel
 import com.example.dotory.ui.theme.DotoryTheme
 import com.example.dotory.ui.write.WriteDotScreen
 import com.example.dotory.ui.write.WriteDotViewModel
+import com.example.dotory.ui.write.WriteDotViewModelFactory
 
 enum class AppScreen {
     Map, WriteDot
@@ -27,7 +28,9 @@ enum class AppScreen {
 
 class MainActivity : ComponentActivity() {
     private val mapViewModel: MapViewModel by viewModels()
-    private val writeDotViewModel: WriteDotViewModel by viewModels()
+    private val writeDotViewModel: WriteDotViewModel by viewModels {
+        WriteDotViewModelFactory((application as DotoryApplication).repository)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
