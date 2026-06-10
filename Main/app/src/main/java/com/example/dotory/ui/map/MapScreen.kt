@@ -1,5 +1,10 @@
 package com.example.dotory.ui.map
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,8 +36,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.runtime.withFrameNanos
+import com.example.dotory.data.model.Dot
+import com.example.dotory.ui.dialog.DeleteConfirmDialog
+import com.example.dotory.ui.map.components.CategoryFilterRow
+import com.example.dotory.ui.map.components.DotCardPopup
 import com.example.dotory.ui.map.components.LocationSelectBar
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
@@ -40,6 +52,9 @@ import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.MapLifeCycleCallback
 import com.kakao.vectormap.MapView
 import com.kakao.vectormap.camera.CameraUpdateFactory
+import com.kakao.vectormap.label.LabelOptions
+import com.kakao.vectormap.label.LabelStyle
+import com.kakao.vectormap.label.LabelStyles
 
 @Composable
 fun MapScreen(
@@ -47,8 +62,30 @@ fun MapScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     var kakaoMapInstance by remember { mutableStateOf<KakaoMap?>(null) }
     var currentCameraCenter by remember { mutableStateOf<LatLng?>(null) }
+    var selectedDotScreenPoint by remember { mutableStateOf<android.graphics.Point?>(null) }
+
+    // 선택된 dot의 스크린 좌표 실시간 업데이트를 위한 LaunchedEffect
+    LaunchedEffect(uiState.selectedDot, kakaoMapInstance) {
+        val selectedDot = uiState.selectedDot
+        val map = kakaoMapInstance
+        if (selectedDot != null && map != null) {
+            // 매 프레임마다 마커의 현재 화면 좌표(Point)를 계산하여 팝업이 드래그/확대/축소 시 실시간으로 따라가도록 함
+            while (true) {
+                selectedDotScreenPoint = map.toScreenPoint(selectedDot.toLatLng())
+                withFrameNanos { }
+            }
+        } else {
+            selectedDotScreenPoint = null
+        }
+    }
+
+    // 마커 삭제를 위한 상태 변수
+    var showDeleteDialog by remember { mutableStateOf<Dot?>(null) }
+
+
 
     // 뷰모델의 줌 이벤트를 감지하여 카메라 조작
     LaunchedEffect(viewModel) {
@@ -59,6 +96,42 @@ fun MapScreen(
                     ZoomEvent.ZoomOut -> map.moveCamera(CameraUpdateFactory.zoomOut())
                 }
             }
+        }
+    }
+
+    // DB 데이터 혹은 선택 카테고리 변경 시 지도 마커 갱신
+    LaunchedEffect(uiState.dots, uiState.selectedCategory, kakaoMapInstance) {
+        val map = kakaoMapInstance ?: return@LaunchedEffect
+        val layer = map.labelManager?.layer ?: return@LaunchedEffect
+
+        // 기존 라벨을 모두 삭제
+        layer.removeAll()
+
+        // 선택 카테고리 필터에 따라 필터링
+        val filteredDots = uiState.dots.filter { dot ->
+            uiState.selectedCategory == null || dot.category == uiState.selectedCategory
+        }
+
+        // 마커 생성 및 맵 추가
+        filteredDots.forEach { dot ->
+            val colorArgb = Color(dot.category.colorHex).toArgb()
+            
+            // 줌 레벨별 마커 비트맵 3종 동적 생성
+            val smallBitmap = createCircleMarkerBitmap(context, colorArgb, size = 18, strokeWidth = 2.5f)
+            val mediumBitmap = createCircleMarkerBitmap(context, colorArgb, size = 34, strokeWidth = 4.5f)
+            val largeBitmap = createCircleMarkerBitmap(context, colorArgb, size = 50, strokeWidth = 6f)
+            
+            // 라벨 스타일 등록 및 생성 (줌 레벨에 따른 스타일 매핑 포함)
+            val styles = map.labelManager?.addLabelStyles(
+                LabelStyles.from(
+                    "style_${dot.category.name}_${dot.id}",
+                    LabelStyle.from(smallBitmap).apply { setZoomLevel(0) },      // 0 ~ 12 레벨: 작게 축소
+                    LabelStyle.from(mediumBitmap).apply { setZoomLevel(13) },   // 13 ~ 15 레벨: 중간
+                    LabelStyle.from(largeBitmap).apply { setZoomLevel(16) }     // 16 레벨 이상: 크게 확대
+                )
+            )
+            val options = LabelOptions.from(dot.toLatLng()).setStyles(styles).setTag(dot.id)
+            layer.addLabel(options)
         }
     }
 
@@ -86,6 +159,27 @@ fun MapScreen(
                             kakaoMap.setOnCameraMoveEndListener { _, cameraPosition, _ ->
                                 currentCameraCenter = cameraPosition.position
                             }
+
+                            // 마커 클릭 리스너 설정
+                            kakaoMap.setOnLabelClickListener { _, _, label ->
+                                val dotId = label.tag as? Long
+                                if (dotId != null) {
+                                    val dot = uiState.dots.firstOrNull { it.id == dotId }
+                                    if (dot != null) {
+                                        viewModel.selectDot(dot)
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
+                            }
+
+                            // 지도 빈 영역 클릭 시 팝업 닫기
+                            kakaoMap.setOnMapClickListener { _, _, _, _ ->
+                                viewModel.selectDot(null)
+                            }
                         }
                     })
                 }
@@ -103,6 +197,17 @@ fun MapScreen(
                     .size(48.dp)
                     .align(Alignment.Center)
                     .offset(y = (-24).dp) // 핀 하단 끝점을 정중앙에 조준하기 위한 디테일 오프셋
+            )
+        }
+
+        // 2. 상단 카테고리 필터 칩 바 (위치 지정 모드가 아닐 때만 노출)
+        if (!uiState.isAddMode) {
+            CategoryFilterRow(
+                selectedCategory = uiState.selectedCategory,
+                onCategorySelected = { viewModel.selectCategory(it) },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 48.dp) // 시스템 스테이터스 바 공간 회피를 위한 여백
             )
         }
 
@@ -148,7 +253,7 @@ fun MapScreen(
             }
         }
 
-        // 2. 위치 추가 모드 진입용 FAB (추가 모드가 아닐 때만 노출)
+        // 3. 위치 추가 모드 진입용 FAB (추가 모드가 아닐 때만 노출)
         if (!uiState.isAddMode) {
             FloatingActionButton(
                 onClick = { viewModel.toggleAddMode() },
@@ -167,7 +272,7 @@ fun MapScreen(
             }
         }
 
-        // 3. 하단 "여기에 추가" 버튼 바 배치 (추가 모드일 때만 노출)
+        // 4. 하단 "여기에 추가" 버튼 바 배치 (추가 모드일 때만 노출)
         if (uiState.isAddMode) {
             LocationSelectBar(
                 onAddClick = {
@@ -179,5 +284,67 @@ fun MapScreen(
                     .align(Alignment.BottomCenter)
             )
         }
+
+        // 5. 마커 클릭 시 나타나는 장소 정보 카드 팝업
+        uiState.selectedDot?.let { dot ->
+            selectedDotScreenPoint?.let { point ->
+                val currentZoomLevel = kakaoMapInstance?.zoomLevel ?: 15
+                val markerRadiusPx = when {
+                    currentZoomLevel <= 12 -> 9
+                    currentZoomLevel in 13..15 -> 17
+                    else -> 25
+                }
+
+                DotCardPopup(
+                    dot = dot,
+                    screenPoint = point,
+                    markerRadiusPx = markerRadiusPx,
+                    onDismiss = { viewModel.selectDot(null) },
+                    onEditClick = {
+                        viewModel.selectDot(null)
+                        // Phase 2 대응 스텁
+                    },
+                    onDeleteClick = {
+                        showDeleteDialog = dot
+                    }
+                )
+            }
+        }
+
+        // 6. 도토리 삭제 확인 다이얼로그
+        showDeleteDialog?.let { dot ->
+            DeleteConfirmDialog(
+                dot = dot,
+                onConfirm = {
+                    viewModel.deleteDot(dot)
+                    showDeleteDialog = null
+                },
+                onDismiss = {
+                    showDeleteDialog = null
+                }
+            )
+        }
     }
+}
+
+/**
+ * 카테고리 색상을 반영한 둥근 모양의 비트맵 마커를 생성합니다.
+ */
+private fun createCircleMarkerBitmap(context: Context, color: Int, size: Int = 48, strokeWidth: Float = 6f): Bitmap {
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        style = Paint.Style.FILL
+    }
+    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = android.graphics.Color.WHITE
+        style = Paint.Style.STROKE
+        this.strokeWidth = strokeWidth
+    }
+    val radius = size / 2f
+    val strokeOffset = strokeWidth / 2f
+    canvas.drawCircle(radius, radius, radius - strokeOffset, paint)
+    canvas.drawCircle(radius, radius, radius - strokeOffset, strokePaint)
+    return bitmap
 }

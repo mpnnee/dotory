@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import com.example.dotory.ui.map.MapNavigationEvent
 import com.example.dotory.ui.map.MapScreen
 import com.example.dotory.ui.map.MapViewModel
+import com.example.dotory.ui.map.MapViewModelFactory
 import com.example.dotory.ui.theme.DotoryTheme
 import com.example.dotory.ui.write.WriteDotScreen
 import com.example.dotory.ui.write.WriteDotViewModel
@@ -27,7 +28,9 @@ enum class AppScreen {
 }
 
 class MainActivity : ComponentActivity() {
-    private val mapViewModel: MapViewModel by viewModels()
+    private val mapViewModel: MapViewModel by viewModels {
+        MapViewModelFactory((application as DotoryApplication).repository)
+    }
     private val writeDotViewModel: WriteDotViewModel by viewModels {
         WriteDotViewModelFactory((application as DotoryApplication).repository)
     }
@@ -50,6 +53,9 @@ class MainActivity : ComponentActivity() {
                                 is MapNavigationEvent.NavigateToWriteDot -> {
                                     writeDotViewModel.initCoordinates(event.latitude, event.longitude)
                                     currentScreen = AppScreen.WriteDot
+                                }
+                                is MapNavigationEvent.NavigateToEditDot -> {
+                                    // Phase 2 편집 모드 연동을 위한 스텁
                                 }
                             }
                         }
