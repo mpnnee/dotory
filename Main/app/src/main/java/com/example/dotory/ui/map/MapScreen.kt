@@ -4,14 +4,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -25,10 +30,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.dotory.ui.map.components.LocationSelectBar
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
+import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.MapLifeCycleCallback
 import com.kakao.vectormap.MapView
 import com.kakao.vectormap.camera.CameraUpdateFactory
@@ -40,6 +48,7 @@ fun MapScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var kakaoMapInstance by remember { mutableStateOf<KakaoMap?>(null) }
+    var currentCameraCenter by remember { mutableStateOf<LatLng?>(null) }
 
     // 뷰모델의 줌 이벤트를 감지하여 카메라 조작
     LaunchedEffect(viewModel) {
@@ -71,12 +80,31 @@ fun MapScreen(
                     }, object : KakaoMapReadyCallback() {
                         override fun onMapReady(kakaoMap: KakaoMap) {
                             kakaoMapInstance = kakaoMap
+                            currentCameraCenter = kakaoMap.cameraPosition?.position
+
+                            // 카메라 이동 종료 시 좌표 갱신 리스너 부착
+                            kakaoMap.setOnCameraMoveEndListener { _, cameraPosition, _ ->
+                                currentCameraCenter = cameraPosition.position
+                            }
                         }
                     })
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        // 1. 위치 지정 모드 정중앙 고정 핀 표시
+        if (uiState.isAddMode) {
+            Icon(
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = "선택 핀",
+                tint = Color.Red,
+                modifier = Modifier
+                    .size(48.dp)
+                    .align(Alignment.Center)
+                    .offset(y = (-24).dp) // 핀 하단 끝점을 정중앙에 조준하기 위한 디테일 오프셋
+            )
+        }
 
         // 우측 하단 줌 컨트롤 버튼 레이아웃
         Card(
@@ -86,7 +114,11 @@ fun MapScreen(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(end = 16.dp, bottom = 32.dp)
+                // 추가 모드일 때는 하단에 위치 선택 바가 들어오므로 줌 버튼의 bottom 여백을 더 주어 겹치지 않게 조절
+                .padding(
+                    end = 16.dp,
+                    bottom = if (uiState.isAddMode) 220.dp else 32.dp
+                )
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -114,6 +146,38 @@ fun MapScreen(
                     )
                 }
             }
+        }
+
+        // 2. 위치 추가 모드 진입용 FAB (추가 모드가 아닐 때만 노출)
+        if (!uiState.isAddMode) {
+            FloatingActionButton(
+                onClick = { viewModel.toggleAddMode() },
+                shape = CircleShape,
+                containerColor = Color(0xFF503A34),
+                contentColor = Color.White,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, bottom = 32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "위치 추가 모드 전환"
+                )
+            }
+        }
+
+        // 3. 하단 "여기에 추가" 버튼 바 배치 (추가 모드일 때만 노출)
+        if (uiState.isAddMode) {
+            LocationSelectBar(
+                onAddClick = {
+                    currentCameraCenter?.let { center ->
+                        viewModel.onLocationConfirmed(center)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+            )
         }
     }
 }
