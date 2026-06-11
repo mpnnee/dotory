@@ -101,20 +101,15 @@ fun MapScreen(
     }
 
     // DB 데이터 혹은 선택 카테고리 변경 시 지도 마커 갱신
-    LaunchedEffect(uiState.dots, uiState.selectedCategory, kakaoMapInstance) {
+    LaunchedEffect(uiState.filteredDots, kakaoMapInstance) {
         val map = kakaoMapInstance ?: return@LaunchedEffect
         val layer = map.labelManager?.layer ?: return@LaunchedEffect
 
         // 기존 라벨을 모두 삭제
         layer.removeAll()
 
-        // 선택 카테고리 필터에 따라 필터링
-        val filteredDots = uiState.dots.filter { dot ->
-            uiState.selectedCategory == null || dot.category == uiState.selectedCategory
-        }
-
         // 마커 생성 및 맵 추가
-        filteredDots.forEach { dot ->
+        uiState.filteredDots.forEach { dot ->
             val colorArgb = Color(dot.category.colorHex).toArgb()
             
             // 줌 레벨별 마커 비트맵 3종 동적 생성

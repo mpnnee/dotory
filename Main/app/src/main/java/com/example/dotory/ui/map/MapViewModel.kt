@@ -10,10 +10,11 @@ import com.kakao.vectormap.LatLng
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 enum class ZoomEvent {
@@ -26,8 +27,36 @@ sealed interface MapNavigationEvent {
 }
 
 class MapViewModel(private val repository: DotRepository) : ViewModel() {
-    private val _uiState = MutableStateFlow(MapUiState())
-    val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
+    private val _selectedCategory = MutableStateFlow<DotCategory?>(null)
+    private val _selectedDot = MutableStateFlow<Dot?>(null)
+    private val _isAddMode = MutableStateFlow(false)
+    private val _isLoading = MutableStateFlow(false)
+
+    val uiState: StateFlow<MapUiState> = combine(
+        repository.getAllDots(),
+        _selectedCategory,
+        _selectedDot,
+        _isAddMode,
+        _isLoading
+    ) { dots, selectedCategory, selectedDot, isAddMode, isLoading ->
+        val filtered = if (selectedCategory == null) {
+            dots
+        } else {
+            dots.filter { it.category == selectedCategory }
+        }
+        MapUiState(
+            dots = dots,
+            selectedCategory = selectedCategory,
+            filteredDots = filtered,
+            selectedDot = selectedDot,
+            isAddMode = isAddMode,
+            isLoading = isLoading
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = MapUiState()
+    )
 
     private val _zoomEvent = MutableSharedFlow<ZoomEvent>()
     val zoomEvent: SharedFlow<ZoomEvent> = _zoomEvent.asSharedFlow()
@@ -35,17 +64,8 @@ class MapViewModel(private val repository: DotRepository) : ViewModel() {
     private val _navigationEvent = MutableSharedFlow<MapNavigationEvent>()
     val navigationEvent: SharedFlow<MapNavigationEvent> = _navigationEvent.asSharedFlow()
 
-    init {
-        // 로컬 DB의 dot 목록 실시간 구독
-        viewModelScope.launch {
-            repository.getAllDots().collect { allDots ->
-                _uiState.update { it.copy(dots = allDots) }
-            }
-        }
-    }
-
     fun setLoading(isLoading: Boolean) {
-        _uiState.update { it.copy(isLoading = isLoading) }
+        _isLoading.value = isLoading
     }
 
     fun zoomIn() {
@@ -62,25 +82,25 @@ class MapViewModel(private val repository: DotRepository) : ViewModel() {
 
     // F-02 위치 지정 모드 토글
     fun toggleAddMode() {
-        _uiState.update { it.copy(isAddMode = !it.isAddMode) }
+        _isAddMode.value = !_isAddMode.value
     }
 
     // F-02 위치 선택 확정
     fun onLocationConfirmed(latLng: LatLng) {
         viewModelScope.launch {
             _navigationEvent.emit(MapNavigationEvent.NavigateToWriteDot(latLng.latitude, latLng.longitude))
-            _uiState.update { it.copy(isAddMode = false) }
+            _isAddMode.value = false
         }
     }
 
     // F-04 카테고리 필터 선택
     fun selectCategory(category: DotCategory?) {
-        _uiState.update { it.copy(selectedCategory = category) }
+        _selectedCategory.value = category
     }
 
     // F-04 팝업 노출할 dot 선택
     fun selectDot(dot: Dot?) {
-        _uiState.update { it.copy(selectedDot = dot) }
+        _selectedDot.value = dot
     }
 
     // F-04 dot 비동기 삭제 트리거
@@ -89,7 +109,7 @@ class MapViewModel(private val repository: DotRepository) : ViewModel() {
             setLoading(true)
             repository.deleteDot(dot)
             // 삭제 시 현재 팝업이 이 dot을 보고 있었다면 팝업 닫기
-            if (_uiState.value.selectedDot?.id == dot.id) {
+            if (_selectedDot.value?.id == dot.id) {
                 selectDot(null)
             }
             setLoading(false)
