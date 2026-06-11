@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -45,8 +46,11 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.layout.onGloballyPositioned
 import coil.compose.AsyncImage
 import com.example.dotory.data.model.Dot
 import com.example.dotory.data.model.DotCategory
@@ -82,27 +86,6 @@ class BubbleShape(
     }
 }
 
-/**
- * 마커의 픽셀 좌표를 기반으로 팝업 카드가 항상 마커 머리 위에 조준되도록 오프셋을 동적으로 계산합니다.
- */
-class MarkerPopupPositionProvider(
-    private val markerPoint: Point,
-    private val markerRadiusPx: Int,
-    private val arrowHeightPx: Int
-) : PopupPositionProvider {
-    override fun calculatePosition(
-        anchorBounds: IntRect,
-        windowSize: IntSize,
-        layoutDirection: LayoutDirection,
-        popupContentSize: IntSize
-    ): IntOffset {
-        val x = markerPoint.x - (popupContentSize.width / 2)
-        // 꼬리 끝이 마커 머리(마커 최상단)에 정확하게 안착되도록 여백 10px 제거
-        val y = markerPoint.y - markerRadiusPx - popupContentSize.height
-        return IntOffset(x, y)
-    }
-}
-
 @Composable
 fun DotCardPopup(
     dot: Dot,
@@ -113,19 +96,25 @@ fun DotCardPopup(
     modifier: Modifier = Modifier,
     markerRadiusPx: Int = 17
 ) {
-    Popup(
-        popupPositionProvider = MarkerPopupPositionProvider(
-            markerPoint = screenPoint,
-            markerRadiusPx = markerRadiusPx,
-            arrowHeightPx = 12
-        ),
-        onDismissRequest = onDismiss
+    var popupSize by remember { mutableStateOf(IntSize.Zero) }
+
+    Box(
+        modifier = modifier
+            .offset {
+                IntOffset(
+                    x = screenPoint.x - (popupSize.width / 2),
+                    y = screenPoint.y - markerRadiusPx - popupSize.height - 75
+                )
+            }
+            .onGloballyPositioned { coordinates ->
+                popupSize = coordinates.size
+            }
     ) {
         Surface(
             shape = BubbleShape(cornerRadius = 16.dp, arrowWidth = 16.dp, arrowHeight = 12.dp),
             color = Color.White,
             shadowElevation = 8.dp,
-            modifier = modifier.width(260.dp)
+            modifier = Modifier.width(260.dp)
         ) {
             Column(
                 modifier = Modifier

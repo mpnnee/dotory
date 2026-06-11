@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.zIndex
 import com.example.dotory.data.model.Dot
 import com.example.dotory.ui.dialog.DeleteConfirmDialog
 import com.example.dotory.ui.map.components.CategoryFilterRow
@@ -67,12 +68,12 @@ fun MapScreen(
     var currentCameraCenter by remember { mutableStateOf<LatLng?>(null) }
     var selectedDotScreenPoint by remember { mutableStateOf<android.graphics.Point?>(null) }
 
-    // 선택된 dot의 스크린 좌표 실시간 업데이트를 위한 LaunchedEffect
+    // 선택된 dot의 스크린 좌표 실시간 업데이트를 위한 LaunchedEffect (드래그/줌 시 마커를 따라 매끄럽게 이동)
     LaunchedEffect(uiState.selectedDot, kakaoMapInstance) {
         val selectedDot = uiState.selectedDot
         val map = kakaoMapInstance
         if (selectedDot != null && map != null) {
-            // 매 프레임마다 마커의 현재 화면 좌표(Point)를 계산하여 팝업이 드래그/확대/축소 시 실시간으로 따라가도록 함
+            // 매 프레임마다 마커의 화면상 픽셀 좌표를 갱신하여 지도 이동 시 한 몸처럼 스르륵 이동하도록 함
             while (true) {
                 selectedDotScreenPoint = map.toScreenPoint(selectedDot.toLatLng())
                 withFrameNanos { }
@@ -184,7 +185,7 @@ fun MapScreen(
                     })
                 }
             },
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize().zIndex(1f)
         )
 
         // 1. 위치 지정 모드 정중앙 고정 핀 표시
@@ -197,6 +198,7 @@ fun MapScreen(
                     .size(48.dp)
                     .align(Alignment.Center)
                     .offset(y = (-24).dp) // 핀 하단 끝점을 정중앙에 조준하기 위한 디테일 오프셋
+                    .zIndex(2f)
             )
         }
 
@@ -208,6 +210,7 @@ fun MapScreen(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = 48.dp) // 시스템 스테이터스 바 공간 회피를 위한 여백
+                    .zIndex(2f)
             )
         }
 
@@ -224,6 +227,7 @@ fun MapScreen(
                     end = 16.dp,
                     bottom = if (uiState.isAddMode) 220.dp else 32.dp
                 )
+                .zIndex(2f)
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -264,6 +268,7 @@ fun MapScreen(
                     .align(Alignment.BottomStart)
                     .navigationBarsPadding()
                     .padding(start = 16.dp, bottom = 32.dp)
+                    .zIndex(2f)
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
@@ -282,6 +287,7 @@ fun MapScreen(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .zIndex(2f)
             )
         }
 
@@ -298,6 +304,7 @@ fun MapScreen(
                 DotCardPopup(
                     dot = dot,
                     screenPoint = point,
+                    modifier = Modifier.zIndex(1f),
                     markerRadiusPx = markerRadiusPx,
                     onDismiss = { viewModel.selectDot(null) },
                     onEditClick = {
