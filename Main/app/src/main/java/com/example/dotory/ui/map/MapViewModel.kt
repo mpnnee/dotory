@@ -16,6 +16,14 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.Priority
+import android.os.Looper
+import android.annotation.SuppressLint
+import android.util.Log
 
 enum class ZoomEvent {
     ZoomIn, ZoomOut
@@ -31,6 +39,8 @@ class MapViewModel(private val repository: DotRepository) : ViewModel() {
     private val _selectedDot = MutableStateFlow<Dot?>(null)
     private val _isAddMode = MutableStateFlow(false)
     private val _isLoading = MutableStateFlow(false)
+    private val _currentLocation = MutableStateFlow<LatLng>(LatLng.from(35.156927, 129.119642))
+    val currentLocation: StateFlow<LatLng> = _currentLocation
 
     val uiState: StateFlow<MapUiState> = combine(
         repository.getAllDots(),
@@ -121,6 +131,35 @@ class MapViewModel(private val repository: DotRepository) : ViewModel() {
             }
             setLoading(false)
         }
+    }
+
+    fun updateCurrentLocation(latitude: Double, longitude: Double) {
+        _currentLocation.value = LatLng.from(latitude, longitude)
+    }
+
+    @SuppressLint("MissingPermission")
+    fun requestLocationUpdate(fusedLocationClient: FusedLocationProviderClient) {
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
+            .setMaxUpdates(1)
+            .build()
+
+        val locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                val location = locationResult.lastLocation
+                if (location != null) {
+                    Log.d("MapViewModel", "Location request success: lat=${location.latitude}, lng=${location.longitude}")
+                } else {
+                    Log.d("MapViewModel", "Location request returned null")
+                }
+                updateCurrentLocation(35.156927, 129.119642)
+            }
+        }
+
+        fusedLocationClient.requestLocationUpdates(
+            locationRequest,
+            locationCallback,
+            Looper.getMainLooper()
+        )
     }
 }
 

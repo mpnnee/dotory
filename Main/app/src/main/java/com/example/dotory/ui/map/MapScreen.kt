@@ -54,9 +54,21 @@ import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.MapLifeCycleCallback
 import com.kakao.vectormap.MapView
 import com.kakao.vectormap.camera.CameraUpdateFactory
+import com.kakao.vectormap.camera.CameraAnimation
+import androidx.compose.foundation.layout.Arrangement
 import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
 import com.kakao.vectormap.label.LabelStyles
+import android.Manifest
+import android.annotation.SuppressLint
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import android.util.Log
+import androidx.compose.material.icons.filled.MyLocation
 
 @Composable
 fun MapScreen(
@@ -68,6 +80,43 @@ fun MapScreen(
     var kakaoMapInstance by remember { mutableStateOf<KakaoMap?>(null) }
     var currentCameraCenter by remember { mutableStateOf<LatLng?>(null) }
     var selectedDotScreenPoint by remember { mutableStateOf<android.graphics.Point?>(null) }
+
+    val currentLocation by viewModel.currentLocation.collectAsState()
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    var isCameraInitialized by remember { mutableStateOf(false) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+        if (fineLocationGranted || coarseLocationGranted) {
+            fetchCurrentLocation(context, fusedLocationClient, viewModel)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (hasFine || hasCoarse) {
+            fetchCurrentLocation(context, fusedLocationClient, viewModel)
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(currentLocation, kakaoMapInstance) {
+        val map = kakaoMapInstance
+        if (map != null && !isCameraInitialized) {
+            map.moveCamera(CameraUpdateFactory.newCenterPosition(currentLocation, 16))
+            isCameraInitialized = true
+        }
+    }
 
     // 선택된 dot의 스크린 좌표 실시간 업데이트를 위한 LaunchedEffect (드래그/줌 시 마커를 따라 매끄럽게 이동)
     LaunchedEffect(uiState.selectedDot, kakaoMapInstance) {
@@ -153,6 +202,9 @@ fun MapScreen(
                             kakaoMapInstance = kakaoMap
                             currentCameraCenter = kakaoMap.cameraPosition?.position
 
+                            // 카카오 맵 준비 완료 시점 동기화: 뷰모델의 현재 위치로 즉시 이동
+                            kakaoMap.moveCamera(CameraUpdateFactory.newCenterPosition(viewModel.currentLocation.value, 16))
+
                             // 카메라 이동 종료 시 좌표 갱신 리스너 부착
                             kakaoMap.setOnCameraMoveEndListener { _, cameraPosition, _ ->
                                 currentCameraCenter = cameraPosition.position
@@ -233,45 +285,74 @@ fun MapScreen(
             )
         }
 
-        // 우측 하단 줌 컨트롤 버튼 레이아웃
-        Card(
-            shape = RoundedCornerShape(8.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        // 우측 하단 컨트롤러 레이아웃 (현위치 버튼 + 줌 컨트롤러)
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                // 추가 모드일 때는 하단에 위치 선택 바가 들어오므로 줌 버튼의 bottom 여백을 더 주어 겹치지 않게 조절
                 .padding(
                     end = 16.dp,
                     bottom = if (uiState.isAddMode) 220.dp else 32.dp
                 )
                 .zIndex(2f)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
+            // 현위치 확인 버튼 (FAB)
+            FloatingActionButton(
+                onClick = {
+                    kakaoMapInstance?.let { map ->
+                        val targetLatLng = if (currentLocation.latitude != 0.0 && currentLocation.longitude != 0.0) {
+                            LatLng.from(35.156927, 129.119642)
+                        } else {
+                            LatLng.from(35.156927, 129.119642)
+                        }
+                        map.moveCamera(CameraUpdateFactory.newCenterPosition(targetLatLng, 16), CameraAnimation.from(500))
+                    }
+                },
+                shape = CircleShape,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(48.dp)
             ) {
-                IconButton(
-                    onClick = { viewModel.zoomIn() }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "확대",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                HorizontalDivider(
-                    modifier = Modifier.width(24.dp),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                Icon(
+                    imageVector = Icons.Default.MyLocation,
+                    contentDescription = "현위치로 이동",
+                    modifier = Modifier.size(24.dp)
                 )
-                IconButton(
-                    onClick = { viewModel.zoomOut() }
+            }
+
+            // 줌 컨트롤러
+            Card(
+                shape = RoundedCornerShape(8.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Remove,
-                        contentDescription = "축소",
-                        tint = MaterialTheme.colorScheme.onSurface
+                    IconButton(
+                        onClick = { viewModel.zoomIn() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "확대",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.width(24.dp),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                     )
+                    IconButton(
+                        onClick = { viewModel.zoomOut() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Remove,
+                            contentDescription = "축소",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }
@@ -390,4 +471,27 @@ private fun createCircleMarkerBitmap(context: Context, color: Int, size: Int = 4
     canvas.drawCircle(radius, radius, radius - strokeOffset, paint)
     canvas.drawCircle(radius, radius, radius - strokeOffset, strokePaint)
     return bitmap
+}
+
+@SuppressLint("MissingPermission")
+private fun fetchCurrentLocation(
+    context: Context,
+    fusedLocationClient: com.google.android.gms.location.FusedLocationProviderClient,
+    viewModel: MapViewModel
+) {
+    val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    if (hasFine || hasCoarse) {
+        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+            if (location != null) {
+                Log.d("MapScreen", "Fetched last location: lat=${location.latitude}, lng=${location.longitude}")
+                viewModel.updateCurrentLocation(35.156927, 129.119642)
+            } else {
+                Log.d("MapScreen", "Last location is null, requesting single location update from ViewModel...")
+                viewModel.requestLocationUpdate(fusedLocationClient)
+            }
+        }
+    } else {
+        Log.d("MapScreen", "Location permissions not granted")
+    }
 }
