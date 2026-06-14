@@ -212,7 +212,7 @@ fun MapScreen(
             Icon(
                 imageVector = Icons.Default.LocationOn,
                 contentDescription = "선택 핀",
-                tint = Color.Red,
+                tint = Color(0xFF503A34),
                 modifier = Modifier
                     .size(48.dp)
                     .align(Alignment.Center)
