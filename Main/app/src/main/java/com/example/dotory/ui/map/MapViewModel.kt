@@ -103,6 +103,13 @@ class MapViewModel(private val repository: DotRepository) : ViewModel() {
         _selectedDot.value = dot
     }
 
+    // F-06 dot 수정 화면 전환 트리거
+    fun editDot(dotId: Long) {
+        viewModelScope.launch {
+            _navigationEvent.emit(MapNavigationEvent.NavigateToEditDot(dotId))
+        }
+    }
+
     // F-04 dot 비동기 삭제 트리거
     fun deleteDot(dot: Dot) {
         viewModelScope.launch {

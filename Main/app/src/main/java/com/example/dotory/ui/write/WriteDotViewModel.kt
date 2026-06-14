@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class WriteUiState(
+    val id: Long = 0,
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
     val title: String = "",
@@ -37,6 +38,25 @@ class WriteDotViewModel(private val repository: DotRepository) : ViewModel() {
             latitude = latitude,
             longitude = longitude
         )
+    }
+
+    fun initEditMode(dotId: Long) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            val dot = repository.getDotById(dotId)
+            if (dot != null) {
+                _uiState.value = WriteUiState(
+                    id = dot.id,
+                    latitude = dot.latitude,
+                    longitude = dot.longitude,
+                    title = dot.title,
+                    comment = dot.comment,
+                    photoUri = dot.photoUri,
+                    category = dot.category
+                )
+            }
+            _uiState.value = _uiState.value.copy(isLoading = false)
+        }
     }
 
     fun onTitleChange(title: String) {
@@ -63,7 +83,8 @@ class WriteDotViewModel(private val repository: DotRepository) : ViewModel() {
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            val newDot = Dot(
+            val dot = Dot(
+                id = state.id,
                 latitude = state.latitude,
                 longitude = state.longitude,
                 title = state.title,
@@ -72,7 +93,11 @@ class WriteDotViewModel(private val repository: DotRepository) : ViewModel() {
                 category = state.category,
                 createdAt = System.currentTimeMillis()
             )
-            repository.insertDot(newDot)
+            if (state.id > 0) {
+                repository.updateDot(dot)
+            } else {
+                repository.insertDot(dot)
+            }
             _uiState.value = _uiState.value.copy(isLoading = false, isSaveSuccess = true)
             _saveEvent.emit(Unit)
         }

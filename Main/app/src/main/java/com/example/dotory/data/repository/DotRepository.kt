@@ -28,6 +28,10 @@ class DotRepository(private val dotDao: DotDao) {
         dotDao.insertDot(dot.toEntity())
     }
 
+    suspend fun getDotById(id: Long): Dot? = withContext(Dispatchers.IO) {
+        dotDao.getDotById(id)?.toDomain()
+    }
+
     suspend fun updateDot(dot: Dot) = withContext(Dispatchers.IO) {
         dotDao.updateDot(dot.toEntity())
     }

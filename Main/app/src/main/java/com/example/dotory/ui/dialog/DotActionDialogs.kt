@@ -37,3 +37,34 @@ fun DeleteConfirmDialog(
         }
     )
 }
+
+@Composable
+fun DotActionDialog(
+    onEditClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = "기록 관리")
+        },
+        text = {
+            Text(text = "이 장소의 기록을 어떻게 처리할까요?")
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onEditClick
+            ) {
+                Text(text = "편집하기", color = Color(0xFF503A34))
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDeleteClick
+            ) {
+                Text(text = "삭제하기", color = Color(0xFFC62828))
+            }
+        }
+    )
+}

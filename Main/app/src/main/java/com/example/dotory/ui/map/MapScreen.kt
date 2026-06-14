@@ -44,6 +44,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.zIndex
 import com.example.dotory.data.model.Dot
 import com.example.dotory.ui.dialog.DeleteConfirmDialog
+import com.example.dotory.ui.dialog.DotActionDialog
 import com.example.dotory.ui.map.components.CategoryFilterRow
 import com.example.dotory.ui.map.components.DotCardPopup
 import com.example.dotory.ui.map.components.LocationSelectBar
@@ -83,8 +84,9 @@ fun MapScreen(
         }
     }
 
-    // 마커 삭제를 위한 상태 변수
+    // 마커 삭제 및 액션을 위한 상태 변수
     var showDeleteDialog by remember { mutableStateOf<Dot?>(null) }
+    var showActionDialog by remember { mutableStateOf<Dot?>(null) }
 
 
 
@@ -169,6 +171,28 @@ fun MapScreen(
                                     }
                                 } else {
                                     false
+                                }
+                            }
+
+                            // 마커 및 지도 롱클릭 리스너 설정 (편집/삭제 다이얼로그 노출)
+                            kakaoMap.setOnTerrainLongClickListener { _, _, point ->
+                                val touchX = point.x
+                                val touchY = point.y
+                                val thresholdPx = 60f // 터치 오차 범위
+                                
+                                val clickedLabelDot = viewModel.uiState.value.dots.firstOrNull { dot ->
+                                    val screenPoint = kakaoMap.toScreenPoint(dot.toLatLng())
+                                    if (screenPoint != null) {
+                                        val dx = screenPoint.x - touchX
+                                        val dy = screenPoint.y - touchY
+                                        (dx * dx + dy * dy) <= (thresholdPx * thresholdPx)
+                                    } else {
+                                        false
+                                    }
+                                }
+                                
+                                if (clickedLabelDot != null) {
+                                    showActionDialog = clickedLabelDot
                                 }
                             }
 
@@ -304,7 +328,7 @@ fun MapScreen(
                     onDismiss = { viewModel.selectDot(null) },
                     onEditClick = {
                         viewModel.selectDot(null)
-                        // Phase 2 대응 스텁
+                        viewModel.editDot(dot.id)
                     },
                     onDeleteClick = {
                         showDeleteDialog = dot
@@ -323,6 +347,23 @@ fun MapScreen(
                 },
                 onDismiss = {
                     showDeleteDialog = null
+                }
+            )
+        }
+
+        // 7. 기록 관리 분기 다이얼로그 (편집/삭제 분기 선택)
+        showActionDialog?.let { dot ->
+            DotActionDialog(
+                onEditClick = {
+                    showActionDialog = null
+                    viewModel.editDot(dot.id)
+                },
+                onDeleteClick = {
+                    showActionDialog = null
+                    showDeleteDialog = dot
+                },
+                onDismiss = {
+                    showActionDialog = null
                 }
             )
         }

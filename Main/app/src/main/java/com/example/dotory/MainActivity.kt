@@ -55,7 +55,8 @@ class MainActivity : ComponentActivity() {
                                     currentScreen = AppScreen.WriteDot
                                 }
                                 is MapNavigationEvent.NavigateToEditDot -> {
-                                    // Phase 2 편집 모드 연동을 위한 스텁
+                                    writeDotViewModel.initEditMode(event.dotId)
+                                    currentScreen = AppScreen.WriteDot
                                 }
                             }
                         }

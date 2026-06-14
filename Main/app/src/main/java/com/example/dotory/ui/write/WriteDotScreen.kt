@@ -89,7 +89,7 @@ fun WriteDotScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("장소 기록") },
+                title = { Text(if (uiState.id > 0) "기록 수정" else "장소 기록") },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
