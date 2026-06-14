@@ -161,12 +161,12 @@ fun MapScreen(
 
         // 마커 생성 및 맵 추가
         uiState.filteredDots.forEach { dot ->
-            val colorArgb = Color(dot.category.colorHex).toArgb()
+            val colorArgb = Color(0xFF966F53).toArgb()
             
-            // 줌 레벨별 마커 비트맵 3종 동적 생성
-            val smallBitmap = createCircleMarkerBitmap(context, colorArgb, size = 18, strokeWidth = 2.5f)
-            val mediumBitmap = createCircleMarkerBitmap(context, colorArgb, size = 34, strokeWidth = 4.5f)
-            val largeBitmap = createCircleMarkerBitmap(context, colorArgb, size = 50, strokeWidth = 6f)
+            // 줌 레벨별 마커 비트맵 3종 동적 생성 (미세한 검은색 테두리 추가를 위해 strokeWidth = 3.3f 지정)
+            val smallBitmap = createCircleMarkerBitmap(context, colorArgb, size = 10, strokeWidth = 3.3f)
+            val mediumBitmap = createCircleMarkerBitmap(context, colorArgb, size = 18, strokeWidth = 3.3f)
+            val largeBitmap = createCircleMarkerBitmap(context, colorArgb, size = 26, strokeWidth = 3.3f)
             
             // 라벨 스타일 등록 및 생성 (줌 레벨에 따른 스타일 매핑 포함)
             val styles = map.labelManager?.addLabelStyles(
@@ -396,9 +396,9 @@ fun MapScreen(
             selectedDotScreenPoint?.let { point ->
                 val currentZoomLevel = kakaoMapInstance?.zoomLevel ?: 15
                 val markerRadiusPx = when {
-                    currentZoomLevel <= 12 -> 9
-                    currentZoomLevel in 13..15 -> 17
-                    else -> 25
+                    currentZoomLevel <= 12 -> 5
+                    currentZoomLevel in 13..15 -> 9
+                    else -> 13
                 }
 
                 DotCardPopup(
@@ -461,15 +461,19 @@ private fun createCircleMarkerBitmap(context: Context, color: Int, size: Int = 4
         this.color = color
         style = Paint.Style.FILL
     }
-    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = android.graphics.Color.WHITE
-        style = Paint.Style.STROKE
-        this.strokeWidth = strokeWidth
-    }
     val radius = size / 2f
-    val strokeOffset = strokeWidth / 2f
-    canvas.drawCircle(radius, radius, radius - strokeOffset, paint)
-    canvas.drawCircle(radius, radius, radius - strokeOffset, strokePaint)
+    if (strokeWidth > 0f) {
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = android.graphics.Color.BLACK
+            style = Paint.Style.STROKE
+            this.strokeWidth = strokeWidth
+        }
+        val strokeOffset = strokeWidth / 2f
+        canvas.drawCircle(radius, radius, radius - strokeOffset, paint)
+        canvas.drawCircle(radius, radius, radius - strokeOffset, strokePaint)
+    } else {
+        canvas.drawCircle(radius, radius, radius, paint)
+    }
     return bitmap
 }
 

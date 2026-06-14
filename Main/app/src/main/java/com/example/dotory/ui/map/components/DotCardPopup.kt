@@ -189,7 +189,7 @@ fun DotCardPopup(
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "삭제",
-                                tint = Color(0xFFC62828),
+                                tint = MaterialTheme.colorScheme.outline,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
