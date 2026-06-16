@@ -180,7 +180,7 @@ fun WriteDotScreen(
                     value = uiState.comment,
                     onValueChange = { viewModel.onCommentChange(it) },
                     label = { Text("코멘트 (최대 100자)") },
-                    placeholder = { Text("맛있었던 한 줄 소감을 남겨주세요.") },
+                    placeholder = { Text("한 줄 소감을 남겨주세요.") },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 4, // 1:1 비율에 알맞게 화면 공간 효율을 위해 4줄 확보
